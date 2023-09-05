@@ -1,14 +1,13 @@
 #ifndef STRING_VIEW_H
 #define STRING_VIEW_H
+#define BAGASJS_STRING_VIEW_INCLUDED 1
 
 #if defined(__EMSCRIPTEN__) || defined(__wasm__) || defined(__wasm32__) || defined(__wasm64__)
     typedef typeof(sizeof(1)) size_t;
     #define STRING_VIEW_TARGET_WASM 1
-    typedef enum { false = 0, true } bool;
 #else
     #define STRING_VIEW_TARGET_WASM 0
     #include <stddef.h>
-    #include <stdbool.h>
 #endif
 
 typedef struct String_View {
@@ -28,11 +27,11 @@ String_View sv_slice(String_View strv, size_t start, size_t end);
 int sv_find_cstr(String_View strv, const char* sth, size_t index);
 int sv_find(String_View strv, String_View sth, size_t index);
 
-bool sv_contains(String_View strv, String_View sth);
-bool sv_has_prefix(String_View strv, String_View prefix);
-bool sv_has_suffix(String_View strv, String_View suffix);
-bool sv_eq(String_View a, String_View b);
-void sv_split(String_View strv, String_View sep, String_View* results, size_t* results_size);
+unsigned char sv_contains(String_View strv, String_View sth);
+unsigned char sv_has_prefix(String_View strv, String_View prefix);
+unsigned char sv_has_suffix(String_View strv, String_View suffix);
+unsigned char sv_eq(String_View a, String_View b);
+int sv_split(String_View strv, String_View sep, String_View* results, size_t* results_size);
 
 #endif // STRING_VIEW_H
 
@@ -70,58 +69,53 @@ String_View sv_slice(String_View strv, size_t start, size_t end)
     };
 }
 
-bool sv_eq(String_View a, String_View b)
+unsigned char sv_eq(String_View a, String_View b)
 {
     if(a.size < b.size)
-        return false;
+        return 0;
     for(size_t i = 0; i < b.size; ++i) {
         if(a.data[i] != b.data[i]) 
-            return false;
+            return 0;
     }
-    return true;
+    return 1;
 }
 
-bool sv_contains(String_View strv, String_View sth)
+unsigned char sv_contains(String_View strv, String_View sth)
 {
     if(strv.size < sth.size)
-        return false;
+        return 0;
     for(size_t i = 0; i < strv.size; ++i) {
         if(strv.data[i] == sth.data[0]) {
             String_View cmp = sv_slice(strv, i, i + sth.size);
             if(sv_eq(sth, cmp))
-                return true;
+                return 1;
         }
     }
-    return false;
+    return 0;
 }
 
-bool sv_has_prefix(String_View strv, String_View prefix)
+unsigned char sv_has_prefix(String_View strv, String_View prefix)
 {
     if(strv.size < prefix.size) {
-        return false;
+        return 0;
     }
 
     for(size_t i = 0; i < prefix.size; ++i) {
         if(strv.data[i] != prefix.data[i])
-            return false;
+            return 0;
     }
-    return true;
+    return 1;
 }
 
-bool sv_has_suffix(String_View strv, String_View suffix)
+unsigned char sv_has_suffix(String_View strv, String_View suffix)
 {
     if(strv.size < suffix.size)
-        return false;
+        return 0;
     for(int i = (int)suffix.size - 1; i >= 0; --i) {
         if(strv.data[strv.size - suffix.size + i] != suffix.data[i])
-            return false;
+            return 0;
     }
-    return true;
-}
-
-int sv_find_cstr(String_View strv, const char* sth, size_t index)
-{
-    return sv_find(strv, sv_from_cstr(sth), index);
+    return 1;
 }
 
 int sv_find(String_View strv, String_View sth, size_t index)
@@ -142,6 +136,11 @@ int sv_find(String_View strv, String_View sth, size_t index)
     }
 
     return -1;
+}
+
+int sv_find_cstr(String_View strv, const char* sth, size_t index)
+{
+    return sv_find(strv, sv_from_cstr(sth), index);
 }
 
 #endif // STRING_VIEW_IMPLEMENTATION
