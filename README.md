@@ -1,8 +1,8 @@
-# Just A Common Utilities For C
+# Header Only Libraries for C
 
 library | description
 ----------------------- | ---------------------------------
-**[string_view.h](string_view.h)** | A simple string view utilities for C
-**[arena_allocator.h](arena_allocator.h)** | A simple string view utilities for C
+**[common.h](common.h)** | A collection of functions and structs that I don't want to reimplement
+**[arena.h](arena.h)** | A simple arena allocator for C
 
 

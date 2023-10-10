@@ -1,6 +1,5 @@
-#ifndef ARENA_ALLOCATOR_H
-#define ARENA_ALLOCATOR_H
-#define BAGASJS_ARENA_ALLOCATOR_INCLUDED 1
+#ifndef ARENA_H
+#define ARENA_H
 
 #define ARENA_BACKEND_LIBC 0
 #define ARENA_BACKEND_LINUX_MMAP 1
@@ -51,9 +50,9 @@ void arena_free(Arena* a);
 char* arena_load_file_text(Arena* a, const char* file_path);
 unsigned char* arena_load_file_data(Arena* a, const char* file_path);
 
-#endif // ARENA_ALLOCATOR_H
+#endif // ARENA_H
 
-#ifdef ARENA_ALLOCATOR_IMPLEMENTATION
+#ifdef ARENA_IMPLEMENTATION
 
 void* arena_alloc(Arena* a, size_t size)
 {
@@ -139,4 +138,4 @@ void region_deinit(Region* r)
     #error "TODO: implement ARENA_BACKEND_WASM_HEAPBASE" 
 #endif
 
-#endif // ARENA_ALLOCATOR_IMPLEMENTATION
+#endif // ARENA_IMPLEMENTATION
