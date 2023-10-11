@@ -36,6 +36,7 @@
 
 void* __common_memcpy(void* dst, const void* src, size_t size);
 size_t __common_strlen(const char* cstr);
+bool __common_iswhitespace(char c);
 
 #define DA_INIT_CAPACITY 32
 #define da(T) struct { T* data; size_t count, capacity; }
@@ -69,6 +70,10 @@ typedef struct {
     size_t size;
 } String_View;
 
+#define SV_FMT "%.*s"
+#define SV_ARGV(sv) (int)sv.size, sv.data
+#define SV_DEBUG_FMT "(%zu) %.*s"
+#define SV_DEBUG_ARGV(sv) sv.size, (int)sv.size, sv.data
 #define INVALID_SV (String_View){0}
 
 String_View sv_from_cstr(const char* data);
@@ -81,6 +86,9 @@ bool sv_contains(String_View strv, String_View sth);
 bool sv_has_prefix(String_View strv, String_View prefix);
 bool sv_has_suffix(String_View strv, String_View suffix);
 bool sv_eq(String_View a, String_View b);
+
+String_View sv_ltrim(String_View strv);
+String_View sv_rtrim(String_View strv);
 
 typedef da(char) String_Builder;
 #define sb_append(sb, cstr, cstr_length) da_append_many(sb, cstr, cstr_length + 1)
@@ -102,6 +110,11 @@ size_t __common_strlen(const char* cstr)
     size_t i = 0;
     while(cstr[++i] != '\0');
     return i;
+}
+
+bool __common_iswhitespace(char ch)
+{
+    return ch == '\n' || ch == '\t' || ch == ' ' || ch == '\r';
 }
 
 String_View sv_from_cstr(const char* data)
@@ -192,6 +205,26 @@ int sv_find(String_View strv, String_View sth, size_t index)
     }
 
     return -1;
+}
+
+String_View sv_ltrim(String_View strv)
+{
+    size_t i = 0;
+    while(__common_iswhitespace(strv.data[i]))
+        i += 1;
+    strv.data += i;
+    strv.size -= i;
+    return strv;
+}
+
+String_View sv_rtrim(String_View strv)
+{
+    if(strv.size == 0) return INVALID_SV;
+    size_t i = 0;
+    while(__common_iswhitespace(strv.data[strv.size - i - 1]))
+        i += 1;
+    strv.size -= i;
+    return strv;
 }
 
 #endif // COMMON_IMPLEMENTATION
