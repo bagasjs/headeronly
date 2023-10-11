@@ -8,10 +8,19 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+void* __common_memcpy(void* dst, const void* src, size_t size);
+size_t __common_strlen(const char* cstr);
+
+bool __common_iswhitespace(char c);
+bool __common_isalpha(char c);
+bool __common_isalnum(char c);
+bool __common_isdigit(char c);
+
 #if !defined(COMMON_ASSERT)
     #include <assert.h>
     #define COMMON_ASSERT assert
 #endif
+
 #if !defined(COMMON_MALLOC) && !defined(COMMON_FREE) && !defined(COMMON_REALLOC)
     #include <stdlib.h>
     #define COMMON_MALLOC malloc
@@ -34,12 +43,9 @@
         b = tmp;        \
     } while(0)
 
-void* __common_memcpy(void* dst, const void* src, size_t size);
-size_t __common_strlen(const char* cstr);
-bool __common_iswhitespace(char c);
-
 #define DA_INIT_CAPACITY 32
 #define da(T) struct { T* data; size_t count, capacity; }
+#define da_free(da) COMMON_FREE((da)->data)
 #define da_append(da, item) \
     do {                                                            \
         if((da)->count >= (da)->capacity) {                         \
@@ -93,6 +99,7 @@ String_View sv_rtrim(String_View strv);
 typedef da(char) String_Builder;
 #define sb_append(sb, cstr, cstr_length) da_append_many(sb, cstr, cstr_length + 1)
 #define sb_append_cstr(sb, cstr) da_append_many(sb, cstr, __common_strlen(cstr) + 1)
+#define sb_free(sb) da_free(sb)
 
 #endif // COMMON_H
 
@@ -115,6 +122,21 @@ size_t __common_strlen(const char* cstr)
 bool __common_iswhitespace(char ch)
 {
     return ch == '\n' || ch == '\t' || ch == ' ' || ch == '\r';
+}
+
+bool __common_isalpha(char c)
+{
+    return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z');
+}
+
+bool __common_isdigit(char c)
+{
+    return ('0' <= c && c <= '9');
+}
+
+bool __common_isalnum(char c)
+{
+    return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z') || ('0' <= c && c <= '9');
 }
 
 String_View sv_from_cstr(const char* data)
