@@ -1,5 +1,5 @@
-#define STRING_VIEW_IMPLEMENTATION
-#include "../string_view.h"
+#define COMMON_IMPLEMENTATION
+#include "../common.h"
 
 #include <stdio.h>
 

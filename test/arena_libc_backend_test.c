@@ -1,5 +1,5 @@
-#define ARENA_ALLOCATOR_IMPLEMENTATION
-#include "../arena_allocator.h"
+#define ARENA_IMPLEMENTATION
+#include "../arena.h"
 #include <assert.h>
 #include <stdio.h>
 

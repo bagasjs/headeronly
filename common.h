@@ -8,6 +8,95 @@
 #include <stddef.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#if defined(_WIN32) || defined(__WIN32__)
+    #include <windows.h>
+    #include <windowsx.h>
+    #define PLATFORM_WINDOWS 1
+    #define PLATFORM_DESKTOP 1
+    #ifndef _WIN64
+        #error "Only supporting 64-bit windows"
+    #endif
+#elif defined(__ANDROID__)
+    #define PLATFORM_ANDROID 1
+    #define PLATFORM_LINUX 1
+    #define PLATFORM_MOBILE 1
+#elif defined(__gnu_linux__) || defined(__linux__)
+    #define PLATFORM_LINUX 1
+    #define PLATFORM_DESKTOP 1
+#elif __APPLE__
+    #define PLATFORM_APPLE 1
+    #include <TargetConditionals.h>
+    #if TARGET_IPHONE_SIMULATOR || TARGET_OS_IPHONE
+        #define PLATFORM_MOBILE 1
+    #elif TARGET_OS_MAC
+        #define PLATFORM_DESKTOP 1
+    #else
+        #warn "Unknown apple platform defaulting to desktop environment"
+        #define PLATFORM_DESKTOP 1
+    #endif
+    #error "Apple platform is unsupported currently"
+#elif defined(__unix__)
+    #define PLATFORM_UNIX 1
+    #error "Unix platform is unsupported"
+#elif defined(_POSIX_VERSION)
+    #define PLATFORM_POSIX 1
+    #error "Unknown posix platform, only supporting linux, android and apple platforms"
+#else
+    #error "Unsupported platform"
+#endif
+
+#ifndef PLATFORM_DESKTOP
+    #define PLATFORM_DESKTOP 0
+#endif
+#ifndef PLATFORM_MOBILE
+    #define PLATFORM_MOBILE 0
+#endif
+#ifndef PLATFORM_WINDOWS
+    #define PLATFORM_WINDOWS 0
+#endif
+#ifndef PLATFORM_ANDROID
+    #define PLATFORM_ANDROID 0
+#endif
+#ifndef PLATFORM_APPLE
+    #define PLATFORM_APPLE 0
+#endif
+#ifndef PLATFORM_LINUX
+    #define PLATFORM_LINUX 0
+#endif
+#ifndef PLATFORM_UNIX
+    #define PLATFORM_UNIX 0
+#endif
+#ifndef PLATFORM_POSIX
+    #define PLATFORM_POSIX 0
+#endif
+
+#if defined(__clang__)
+    #define CC_CLANG 1
+#elif defined(_MSC_VER)
+    #if !PLATFORM_WINDOWS
+        #error "Unreachable: MSVC should only be in Windows"
+    #endif
+    #define CC_MSVC 1
+#elif defined(__GNUC__) || defined(__GNUG__)
+    #define CC_GCC 1
+#else
+    #error "Unsupported compilers"
+#endif
+
+#ifndef CC_CLANG
+    #define CC_CLANG 0
+#endif
+#ifndef CC_MSVC
+    #define CC_MSVC 0
+#endif
+#ifndef CC_GCC
+    #define CC_GCC 0
+#endif
+
 void* __common_memcpy(void* dst, const void* src, size_t size);
 size_t __common_strlen(const char* cstr);
 
@@ -109,10 +198,63 @@ typedef da(char) String_Builder;
 #define sb_append_cstr(sb, cstr) da_append_many(sb, cstr, __common_strlen(cstr) + 1)
 #define sb_free(sb) da_free(sb)
 
+#ifndef COMMON_PLATFORM_INDEPENDENT
+
+typedef da(String_View) Path_List;
+bool mkdir_if_not_exists(const char* path);
+bool copy_file(const char* dst_path, const char* src_path);
+bool copy_dir_recursive(const char* dst_path, const char* src_path);
+bool read_dir(const char* path, Path_List* children);
+
+bool load_file_data(const char* path, String_Builder* sb);
+bool save_file_data(const char* path, const void* data, size_t size);
+
+#endif // COMMON_PLATFORM_INDEPENDENT
+
+typedef enum {
+    TRACE_LOG_INFO = 0,
+    TRACE_LOG_WARN = 1,
+    TRACE_LOG_ERROR = 2,
+    TRACE_LOG_FATAL = 3,
+} Trace_Log_Level;
+
+void trace_log(Trace_Log_Level level, const char* fmt, ...);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif // COMMON_H
 
-#define COMMON_IMPLEMENTATION
 #ifdef COMMON_IMPLEMENTATION
+
+#include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+#include <errno.h>
+
+#ifndef COMMON_PLATFORM_INDEPENDENT
+    #if PLATFORM_WINDOWS
+        #define WIN32_LEAN_AND_MEAN
+        #include <windows.h>
+        #include <direct.h>
+        #include <shellapi.h>
+        struct dirent {
+            char d_name[MAX_PATH+1];
+        };
+        typedef struct DIR DIR;
+        DIR* opendir(const char* dirpath);
+        struct dirent* readdir(DIR* dirp);
+        int closedir(DIR* dirp);
+    #else
+        #include <dirent.h>
+        #include <sys/types.h>
+        #include <sys/wait.h>
+        #include <sys/stat.h>
+        #include <unistd.h>
+        #include <fcntl.h>
+    #endif
+#endif
 
 void* __common_memcpy(void* dst, const void* src, size_t size)
 {
@@ -305,6 +447,7 @@ String_View sv_chop_by_delim(String_View* strv, char delim)
     }
     return result;
 }
+
 String_View sv_chop_by_sv(String_View *sv, String_View thicc_delim)
 {
     String_View window = sv_from_parts(sv->data, thicc_delim.count);
@@ -364,6 +507,179 @@ int sv_to_int(String_View strv)
     if(is_negative) result *= -1;
     return result;
 }
+
+void trace_log(Trace_Log_Level level, const char* fmt, ...)
+{
+    FILE* f = level <= TRACE_LOG_WARN ? stdout : stderr;
+    switch(level) {
+        case TRACE_LOG_INFO: fprintf(f, "[INFO] ");
+        case TRACE_LOG_WARN: fprintf(f, "[WARN] ");
+        case TRACE_LOG_ERROR: fprintf(f, "[ERROR] ");
+        case TRACE_LOG_FATAL: fprintf(f, "[FATAL] ");
+    }
+
+    va_list arg;
+    va_start(arg, fmt);
+    vfprintf(f, fmt, arg);
+    va_end(arg);
+    fprintf(f, "\n");
+}
+
+#ifndef COMMON_PLATFORM_INDEPENDENT
+
+bool mkdir_if_not_exists(const char* path)
+{
+#if PLATFORM_WINDOWS
+    int result = mkdir(path);
+#else
+    int result = mkdir(path, 0755);
+#endif
+    if(result < 0) {
+        if(errno == EEXIST) {
+            trace_log(TRACE_LOG_WARN, "Directory `%s` already exists", path);
+            return true;
+        }
+        trace_log(TRACE_LOG_ERROR, "Could not create directory `%s`: `%s`", path, strerror(errno));
+        return false;
+    }
+    return false;
+}
+
+bool copy_file(const char* dst_path, const char* src_path)
+{
+    COMMON_ASSERT(0 && "Not implemented");
+    return false;
+}
+
+bool copy_dir_recursive(const char* dst_path, const char* src_path)
+{
+    COMMON_ASSERT(0 && "Not implemented");
+    return false;
+}
+
+bool read_dir(const char* parent, Path_List* children)
+{
+    bool result = true;
+    DIR *dir = NULL;
+
+    dir = opendir(parent);
+    if (dir == NULL) {
+        trace_log(TRACE_LOG_ERROR, "Could not open directory %s: %s", parent, strerror(errno));
+        if (dir) closedir(dir);
+        return result;
+    }
+
+    errno = 0;
+    struct dirent *ent = readdir(dir);
+    while (ent != NULL) {
+        da_append(children, nob_temp_strdup(ent->d_name));
+        ent = readdir(dir);
+    }
+
+    if (errno != 0) {
+        trace_log(TRACE_LOG_ERROR, "Could not read directory %s: %s", parent, strerror(errno));
+        if (dir) closedir(dir);
+        return result;
+    }
+
+    if (dir) closedir(dir);
+    return result;
+}
+
+bool load_file_data(const char* path, String_Builder* sb)
+{
+}
+
+bool save_file_data(const char* path, const void* data, size_t size)
+{
+}
+
+#endif // COMMON_PLATFORM_INDEPENDENT
+
+#if PLATFORM_WINDOWS
+
+struct DIR
+{
+    HANDLE hFind;
+    WIN32_FIND_DATA data;
+    struct dirent* dirent;
+};
+
+DIR *opendir(const char *dirpath)
+{
+    COMMON_ASSERT(dirpath);
+
+    char buffer[MAX_PATH];
+    snprintf(buffer, MAX_PATH, "%s\\*", dirpath);
+
+    DIR *dir = (DIR*)calloc(1, sizeof(DIR));
+
+    dir->hFind = FindFirstFile(buffer, &dir->data);
+    if (dir->hFind == INVALID_HANDLE_VALUE) {
+        // TODO: opendir should set errno accordingly on FindFirstFile fail
+        // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
+        errno = ENOSYS;
+        goto fail;
+    }
+
+    return dir;
+
+fail:
+    if (dir) {
+        free(dir);
+    }
+
+    return NULL;
+}
+
+struct dirent *readdir(DIR *dirp)
+{
+    COMMON_ASSERT(dirp);
+
+    if (dirp->dirent == NULL) {
+        dirp->dirent = (struct dirent*)calloc(1, sizeof(struct dirent));
+    } else {
+        if(!FindNextFile(dirp->hFind, &dirp->data)) {
+            if (GetLastError() != ERROR_NO_MORE_FILES) {
+                // TODO: readdir should set errno accordingly on FindNextFile fail
+                // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
+                errno = ENOSYS;
+            }
+
+            return NULL;
+        }
+    }
+
+    memset(dirp->dirent->d_name, 0, sizeof(dirp->dirent->d_name));
+
+    strncpy(
+        dirp->dirent->d_name,
+        dirp->data.cFileName,
+        sizeof(dirp->dirent->d_name) - 1);
+
+    return dirp->dirent;
+}
+
+int closedir(DIR *dirp)
+{
+    COMMON_ASSERT(dirp);
+
+    if(!FindClose(dirp->hFind)) {
+        // TODO: closedir should set errno accordingly on FindClose fail
+        // https://docs.microsoft.com/en-us/windows/win32/api/errhandlingapi/nf-errhandlingapi-getlasterror
+        errno = ENOSYS;
+        return -1;
+    }
+
+    if (dirp->dirent) {
+        free(dirp->dirent);
+    }
+    free(dirp);
+
+    return 0;
+}
+
+#endif // PLATFORM_WINDOWS
 
 #endif // COMMON_IMPLEMENTATION
 
